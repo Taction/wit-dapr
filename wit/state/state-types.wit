@@ -1,0 +1,47 @@
+package dapr:state
+
+interface state-types {
+  type error = string
+
+  type key = string
+  type metadata = list<tuple<string, string>>
+  type consistency = string // "eventual" | "strong"
+  record get-state-options {
+    consistency: consistency,
+  }
+  record get-request {
+    key: key,
+    metadata: option<metadata>,
+    options: option<get-state-options>,
+  }
+
+  type data =list<u8>
+  type etag = option<string>
+  type content-type = option<string>
+  record get-response {
+    data: data,
+    etag: etag,
+    metadata: option<metadata>,
+    content-type: content-type,
+  }
+
+  record set-state-options {
+    concurrency: string, // "first-write" | "last-write"
+    consistency: consistency,
+  }
+  record set-request {
+    key: key,
+    value: data,
+    etag: etag,
+    metadata: option<metadata>,
+    options: set-state-options,
+    content-type: content-type,
+  }
+
+  record delete-request {
+    key: key,
+    etag: etag,
+    metadata: option<metadata>,
+    options: set-state-options,
+  }
+}

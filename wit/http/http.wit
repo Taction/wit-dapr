@@ -1,0 +1,12 @@
+package dapr:http
+
+world http {
+  export http-handler
+}
+
+interface http-handler {
+  use http-types.{request, response}
+
+  // The entrypoint for an HTTP handler.
+  handle-http-request: func(req: request) -> response
+}

@@ -7,6 +7,13 @@ import (
 	"net/http"
 )
 
+type Headers map[string][]string
+type Response struct {
+	StatusCode uint16
+	Headers    *Headers
+	Body       []byte
+}
+
 type HTTP struct {
 }
 
@@ -16,9 +23,6 @@ func MakeHTTP() *HTTP {
 }
 
 func (w *HTTP) Instantiate(ctx context.Context, rt wazero.Runtime) error {
-	if err := default_http.Instantiate(ctx, rt, w.r, w.rs, w.f); err != nil {
-		return err
-	}
 	return nil
 }
 

@@ -18,11 +18,16 @@ func Malloc(ctx context.Context, m api.Module, size uint32) (uint32, error) {
 	return uint32(result[0]), err
 }
 
-func Free(ctx context.Context, m api.Module, size uint32) {
+func Free[T ~uint32 | ~uint64](ctx context.Context, m api.Module, ptrs ...T) {
+	if len(ptrs) == 0 {
+		return
+	}
 	free := m.ExportedFunction("free")
-	_, err := free.Call(ctx, uint64(size))
-	if err != nil {
-		log.Println(err.Error())
+	for _, ptr := range ptrs {
+		_, err := free.Call(ctx, uint64(ptr))
+		if err != nil {
+			log.Println(err.Error())
+		}
 	}
 }
 

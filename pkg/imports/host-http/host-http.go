@@ -26,13 +26,13 @@ func (w *HTTP) Instantiate(ctx context.Context, rt wazero.Runtime) error {
 	return nil
 }
 
-func (w *HTTP) MakeHandler(m api.Module) http.Handler {
+func MakeHandler(m api.Module) http.Handler {
 	return WasmServer{
 		Module: m,
 	}
 }
 
 func (w *HTTP) HandleHTTP(writer http.ResponseWriter, req *http.Request, m api.Module) {
-	handler := w.MakeHandler(m)
+	handler := MakeHandler(m)
 	handler.ServeHTTP(writer, req)
 }

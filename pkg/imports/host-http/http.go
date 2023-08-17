@@ -27,6 +27,8 @@ func (w WasmServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	methond := getMethod(req.Method)
 	urlPtr, urlLen, headerPtr, headerLen, paramPtr, paramLen, hasBody, bodyPtr, bodyLen, err := formatRequestAsArgs(w.Module, req)
 	resp, err := fn.Call(context.TODO(), uint64(methond), urlPtr, urlLen, headerPtr, headerLen, paramPtr, paramLen, hasBody, bodyPtr, bodyLen)
+	freeHeader(w.Module, headerPtr, headerLen)
+	common.Free(context.TODO(), w.Module, urlPtr, headerPtr, paramPtr, bodyPtr) // free after used
 	if err != nil {
 		res.WriteHeader(500)
 		res.Write([]byte(err.Error()))
@@ -62,7 +64,7 @@ func formatRequestAsArgs(mod api.Module, req *http.Request) (uint64, uint64, uin
 	ctx := context.Background()
 	url := req.URL.String()
 	urlLen := uint32(len(url))
-	urlPtr, err := Malloc(ctx, mod, uint32(urlLen))
+	urlPtr, err := common.Malloc(ctx, mod, uint32(urlLen))
 	if err != nil {
 		return 0, 0, 0, 0, 0, 0, 0, 0, 0, err
 	}
@@ -72,7 +74,7 @@ func formatRequestAsArgs(mod api.Module, req *http.Request) (uint64, uint64, uin
 	le := binary.LittleEndian
 	headerLen := uint32(len(req.Header))
 	// 8 bytes per string/string
-	headerPtr, err := Malloc(ctx, mod, headerLen*16)
+	headerPtr, err := common.Malloc(ctx, mod, headerLen*16)
 	if err != nil {
 		return 0, 0, 0, 0, 0, 0, 0, 0, 0, err
 	}
@@ -97,12 +99,13 @@ func formatRequestAsArgs(mod api.Module, req *http.Request) (uint64, uint64, uin
 	paramPtr, paramLen := 0, 0
 	hasBody := 0
 	body, err := io.ReadAll(req.Body)
+	defer req.Body.Close()
 	if err != nil {
 		return 0, 0, 0, 0, 0, 0, 0, 0, 0, err
 	}
 	var bodyPtr, bodyLen uint32 = 0, uint32(len(body))
 	if len(body) > 0 {
-		bodyPtr, err = Malloc(ctx, mod, uint32(len(body)))
+		bodyPtr, err = common.Malloc(ctx, mod, uint32(len(body)))
 		if bodyPtr != 0 {
 			hasBody = 1
 		}
@@ -110,16 +113,21 @@ func formatRequestAsArgs(mod api.Module, req *http.Request) (uint64, uint64, uin
 	return uint64(urlPtr), uint64(urlLen), uint64(headerPtr), uint64(headerLen), uint64(paramPtr), uint64(paramLen), uint64(hasBody), uint64(bodyPtr), uint64(bodyLen), nil
 }
 
-func Malloc(ctx context.Context, m api.Module, size uint32) (uint32, error) {
-	malloc := m.ExportedFunction("malloc")
-	result, err := malloc.Call(ctx, uint64(size))
-	if err != nil {
-		log.Println(err.Error())
+func freeHeader(mod api.Module, headerPtr, headerLen uint64) {
+	headers, ok := mod.Memory().Read(uint32(headerPtr), uint32(headerLen)*16)
+	if !ok {
+		log.Println("free header failed, read header metadata failed")
+		return
 	}
-	return uint32(result[0]), err
+	for i := uint64(0); i < headerLen; i++ {
+		keyPtr := binary.LittleEndian.Uint32(headers[i*16 : i*16+4])
+		valuePtr := binary.LittleEndian.Uint32(headers[i*16+8 : i*16+12])
+		common.Free(context.Background(), mod, keyPtr, valuePtr)
+	}
 }
+
 func allocateWriteString(ctx context.Context, m api.Module, s string) (uint32, error) {
-	ptr, err := Malloc(ctx, m, uint32(len(s)))
+	ptr, err := common.Malloc(ctx, m, uint32(len(s)))
 	if err != nil {
 		log.Println(err.Error())
 		return 0, err

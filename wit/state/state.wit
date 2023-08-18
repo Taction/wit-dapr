@@ -1,13 +1,13 @@
 package dapr:state
 
 world state {
-  export state-interface
+  import state-interface
 }
 
 interface state-interface {
-  use state-types.{get-request,get-response,set-request,delete-request,error}
+  use state-types.{store-name,get-request,get-response,set-request,delete-request,error}
 
-  get: func(req: get-request) -> result<get-response,error>
-  set: func(req: set-request) -> result<u32,error>
-  delete: func(req: delete-request) -> result<u32,error>
+  get: func(name: store-name, req: get-request) -> result<get-response,error>
+  set: func(name: store-name, req: set-request) -> result<u32,error>
+  delete: func(name: store-name, req: delete-request) -> result<u32,error>
 }

@@ -3,16 +3,22 @@ package dapr:state
 interface state-types {
   type error = string
 
+  type store-name = string
   type key = string
   type metadata = list<tuple<string, string>>
-  type consistency = string // "eventual" | "strong"
+//   type consistency = string // "eventual" | "strong"
+  enum consistency {
+    unspecified,
+    eventual,
+    strong,
+  }
   record get-state-options {
     consistency: consistency,
   }
   record get-request {
     key: key,
     metadata: option<metadata>,
-    options: option<get-state-options>,
+    options: get-state-options,
   }
 
   type data =list<u8>
@@ -25,8 +31,13 @@ interface state-types {
     content-type: content-type,
   }
 
+  enum concurrency {
+    unspecified,
+    first-write,
+    last-write,
+  }
   record set-state-options {
-    concurrency: string, // "first-write" | "last-write"
+    concurrency: concurrency, // "first-write" | "last-write"
     consistency: consistency,
   }
   record set-request {

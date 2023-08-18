@@ -17,6 +17,8 @@ typedef struct {
 
 typedef state_string_t dapr_state_state_types_error_t;
 
+typedef state_string_t dapr_state_state_types_store_name_t;
+
 typedef state_string_t dapr_state_state_types_key_t;
 
 typedef struct {
@@ -29,7 +31,11 @@ typedef struct {
   size_t len;
 } dapr_state_state_types_metadata_t;
 
-typedef state_string_t dapr_state_state_types_consistency_t;
+typedef uint8_t dapr_state_state_types_consistency_t;
+
+#define DAPR_STATE_STATE_TYPES_CONSISTENCY_UNSPECIFIED 0
+#define DAPR_STATE_STATE_TYPES_CONSISTENCY_EVENTUAL 1
+#define DAPR_STATE_STATE_TYPES_CONSISTENCY_STRONG 2
 
 typedef struct {
   dapr_state_state_types_consistency_t consistency;
@@ -41,14 +47,9 @@ typedef struct {
 } state_option_dapr_state_state_types_metadata_t;
 
 typedef struct {
-  bool is_some;
-  dapr_state_state_types_get_state_options_t val;
-} state_option_dapr_state_state_types_get_state_options_t;
-
-typedef struct {
   dapr_state_state_types_key_t key;
   state_option_dapr_state_state_types_metadata_t metadata;
-  state_option_dapr_state_state_types_get_state_options_t options;
+  dapr_state_state_types_get_state_options_t options;
 } dapr_state_state_types_get_request_t;
 
 typedef struct {
@@ -73,8 +74,14 @@ typedef struct {
   dapr_state_state_types_content_type_t content_type;
 } dapr_state_state_types_get_response_t;
 
+typedef uint8_t dapr_state_state_types_concurrency_t;
+
+#define DAPR_STATE_STATE_TYPES_CONCURRENCY_UNSPECIFIED 0
+#define DAPR_STATE_STATE_TYPES_CONCURRENCY_FIRST_WRITE 1
+#define DAPR_STATE_STATE_TYPES_CONCURRENCY_LAST_WRITE 2
+
 typedef struct {
-  state_string_t concurrency;
+  dapr_state_state_types_concurrency_t concurrency;
   dapr_state_state_types_consistency_t consistency;
 } dapr_state_state_types_set_state_options_t;
 
@@ -93,6 +100,8 @@ typedef struct {
   state_option_dapr_state_state_types_metadata_t metadata;
   dapr_state_state_types_set_state_options_t options;
 } dapr_state_state_types_delete_request_t;
+
+typedef dapr_state_state_types_store_name_t dapr_state_state_interface_store_name_t;
 
 typedef dapr_state_state_types_get_request_t dapr_state_state_interface_get_request_t;
 
@@ -120,29 +129,27 @@ typedef struct {
   } val;
 } state_result_u32_dapr_state_state_interface_error_t;
 
-// Exported Functions from `dapr:state/state-interface`
-void exports_dapr_state_state_interface_get(dapr_state_state_interface_get_request_t *req, state_result_dapr_state_state_interface_get_response_dapr_state_state_interface_error_t *ret);
-void exports_dapr_state_state_interface_set(dapr_state_state_interface_set_request_t *req, state_result_u32_dapr_state_state_interface_error_t *ret);
-void exports_dapr_state_state_interface_delete(dapr_state_state_interface_delete_request_t *req, state_result_u32_dapr_state_state_interface_error_t *ret);
+// Imported Functions from `dapr:state/state-interface`
+void dapr_state_state_interface_get(dapr_state_state_interface_store_name_t *name, dapr_state_state_interface_get_request_t *req, state_result_dapr_state_state_interface_get_response_dapr_state_state_interface_error_t *ret);
+void dapr_state_state_interface_set(dapr_state_state_interface_store_name_t *name, dapr_state_state_interface_set_request_t *req, state_result_u32_dapr_state_state_interface_error_t *ret);
+void dapr_state_state_interface_delete(dapr_state_state_interface_store_name_t *name, dapr_state_state_interface_delete_request_t *req, state_result_u32_dapr_state_state_interface_error_t *ret);
 
 // Helper Functions
 
 void dapr_state_state_types_error_free(dapr_state_state_types_error_t *ptr);
+void dapr_state_state_types_store_name_free(dapr_state_state_types_store_name_t *ptr);
 void dapr_state_state_types_key_free(dapr_state_state_types_key_t *ptr);
 void state_tuple2_string_string_free(state_tuple2_string_string_t *ptr);
 void dapr_state_state_types_metadata_free(dapr_state_state_types_metadata_t *ptr);
-void dapr_state_state_types_consistency_free(dapr_state_state_types_consistency_t *ptr);
-void dapr_state_state_types_get_state_options_free(dapr_state_state_types_get_state_options_t *ptr);
 void state_option_dapr_state_state_types_metadata_free(state_option_dapr_state_state_types_metadata_t *ptr);
-void state_option_dapr_state_state_types_get_state_options_free(state_option_dapr_state_state_types_get_state_options_t *ptr);
 void dapr_state_state_types_get_request_free(dapr_state_state_types_get_request_t *ptr);
 void dapr_state_state_types_data_free(dapr_state_state_types_data_t *ptr);
 void dapr_state_state_types_etag_free(dapr_state_state_types_etag_t *ptr);
 void dapr_state_state_types_content_type_free(dapr_state_state_types_content_type_t *ptr);
 void dapr_state_state_types_get_response_free(dapr_state_state_types_get_response_t *ptr);
-void dapr_state_state_types_set_state_options_free(dapr_state_state_types_set_state_options_t *ptr);
 void dapr_state_state_types_set_request_free(dapr_state_state_types_set_request_t *ptr);
 void dapr_state_state_types_delete_request_free(dapr_state_state_types_delete_request_t *ptr);
+void dapr_state_state_interface_store_name_free(dapr_state_state_interface_store_name_t *ptr);
 void dapr_state_state_interface_get_request_free(dapr_state_state_interface_get_request_t *ptr);
 void dapr_state_state_interface_get_response_free(dapr_state_state_interface_get_response_t *ptr);
 void dapr_state_state_interface_set_request_free(dapr_state_state_interface_set_request_t *ptr);

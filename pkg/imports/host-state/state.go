@@ -7,7 +7,6 @@ import (
 	"fmt"
 	contribMetadata "github.com/dapr/components-contrib/metadata"
 	comstate "github.com/dapr/components-contrib/state"
-	"github.com/taction/wit-dapr/dapr/state"
 	"github.com/taction/wit-dapr/pkg/common"
 	"github.com/taction/wit-dapr/pkg/imports/host-state/registery"
 	"github.com/tetratelabs/wazero/api"
@@ -23,7 +22,7 @@ type HostImpl struct {
 	componentInstance map[string]comstate.Store
 }
 
-var State = &HostImpl{}
+var State = &HostImpl{componentSpec: map[string]Component{}, componentInstance: map[string]comstate.Store{}}
 
 func AddComp(comps ...Component) {
 	for _, comp := range comps {
@@ -36,7 +35,8 @@ func (h *HostImpl) getComponent(ctx context.Context, name string) (comstate.Stor
 	defer h.lock.Unlock()
 	c, ok := h.componentInstance[name]
 	if !ok {
-		c, err := h.createComponent(ctx, name)
+		var err error
+		c, err = h.createComponent(ctx, name)
 		if err != nil {
 			fmt.Printf("create component %s failed\n", name)
 			return nil, false
@@ -51,7 +51,7 @@ func (h *HostImpl) createComponent(ctx context.Context, name string) (comstate.S
 	if !ok {
 		return nil, errors.New("component not found")
 	}
-	s, err := registery.DefaultRegistry.Create(name, "v1", "state."+name)
+	s, err := registery.DefaultRegistry.Create(spec.Spec.Type, spec.Spec.Version, fmt.Sprintf("%s (%s/%s)", name, spec.Spec.Type, spec.Spec.Version))
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +125,8 @@ func (h *HostImpl) Get(ctx context.Context, m api.Module, namePtr, nameLen, keyP
 		handleGetError(ctx, m, resultPtr, err)
 		return
 	}
-
+	byt := marshalGetResponse(ctx, m, resp)
+	m.Memory().Write(resultPtr, byt)
 }
 
 // todo free memory
@@ -139,6 +140,7 @@ func marshalGetResponse(ctx context.Context, m api.Module, resp *comstate.GetRes
 			fmt.Println("malloc failed")
 			return nil
 		}
+		m.Memory().Write(mp, []byte(*resp.ETag))
 		binary.LittleEndian.PutUint32(resbytes[16:20], mp)
 		binary.LittleEndian.PutUint32(resbytes[20:24], uint32(len(*resp.ETag)))
 	} else {
@@ -177,6 +179,18 @@ func marshalGetResponse(ctx context.Context, m api.Module, resp *comstate.GetRes
 	} else {
 		binary.LittleEndian.PutUint32(resbytes[36:40], 0) // no content type
 	}
+
+	// handle value
+	if len(resp.Data) > 0 {
+		mp, err := common.Malloc(ctx, m, uint32(len(resp.Data)))
+		if err != nil {
+			fmt.Println("malloc failed")
+			return nil
+		}
+		m.Memory().Write(mp, resp.Data)
+		binary.LittleEndian.PutUint32(resbytes[4:8], mp)
+	}
+	binary.LittleEndian.PutUint32(resbytes[8:12], uint32(len(resp.Data)))
 	return resbytes
 }
 
@@ -242,10 +256,76 @@ func encodeMetadata(ctx context.Context, mod api.Module, metadata map[string]str
 }
 
 func (h *HostImpl) Set(ctx context.Context, m api.Module, inPtr, outPtr uint32) {
+	// read request
+	name, req, err := readSetRequest(ctx, m, inPtr)
 
+	// call state store
+	c, ok := h.getComponent(ctx, string(name))
+	if !ok {
+		handleGetError(ctx, m, outPtr, errors.New("get component failed"))
+		return
+	}
+	err = c.Set(ctx, req)
+	if err != nil {
+		handleSetError(ctx, m, outPtr, err)
+		return
+	}
+	// handle response
+	handleSetResponseOk(ctx, m, outPtr)
 }
 
-func (h *HostImpl) Delete(name string, req state.DaprStateStateTypesDeleteRequest) state.Result[uint32, string] {
+func readSetRequest(ctx context.Context, m api.Module, ptr uint32) (string, *comstate.SetRequest, error) {
+	data, ok := common.ReadBytes(m, ptr, SetLen)
+	if !ok {
+		return "", nil, errors.New("read request failed")
+	}
+	// read name
+	namePtr, nameLen := binary.LittleEndian.Uint32(data[0:4]), binary.LittleEndian.Uint32(data[4:8])
+	name, ok := common.ReadString(m, namePtr, nameLen)
+	if !ok {
+		return "", nil, errors.New("read name failed")
+	}
+	keyPtr, keyLen := binary.LittleEndian.Uint32(data[8:12]), binary.LittleEndian.Uint32(data[12:16])
+	key, ok := common.ReadString(m, keyPtr, keyLen)
+	if !ok {
+		return "", nil, errors.New("read key failed")
+	}
+	valuePtr, valueLen := binary.LittleEndian.Uint32(data[16:20]), binary.LittleEndian.Uint32(data[20:24])
+	value, ok := common.ReadBytes(m, valuePtr, valueLen)
+	// todo handle etag and metadata
+	return name, &comstate.SetRequest{
+		Key:   string(key),
+		Value: value,
+	}, nil
+}
+
+func handleSetError(ctx context.Context, m api.Module, ptr uint32, err error) {
+	resbytes := make([]byte, SetLen)
+	binary.LittleEndian.PutUint32(resbytes[0:4], 1) // err
+	msg := err.Error()
+	mp, err := common.Malloc(ctx, m, uint32(len(msg)))
+	if err != nil {
+		fmt.Println("malloc failed")
+		return
+	}
+	m.Memory().Write(mp, []byte(msg))
+	binary.LittleEndian.PutUint32(resbytes[4:8], mp)
+	binary.LittleEndian.PutUint32(resbytes[8:12], uint32(len(msg)))
+	m.Memory().Write(ptr, resbytes)
+}
+
+func handleSetResponseOk(ctx context.Context, m api.Module, ptr uint32) {
+	resbytes := make([]byte, SetLen)
+	//binary.LittleEndian.PutUint32(resbytes[0:4], 0) // result<ok> not need to write
+	binary.LittleEndian.PutUint32(resbytes[4:8], 1) // write 1 byte to indicate ok
+	m.Memory().Write(ptr, resbytes)
+}
+
+func (h *HostImpl) Delete(namePtr, nameLen, keyPtr, keyLen, etagOption, etagPtr, etagLen, metadataOption, metadataPtr, metadataLen, concurrency, consistency, outPtr uint32) {
 	//TODO implement me
 	panic("implement me")
+}
+
+func LoadComponents(paths ...string) ([]Component, error) {
+	return nil, nil
 }

@@ -53,8 +53,8 @@ func (s *Registry) Create(name, version, logName string) (state.Store, error) {
 
 func (s *Registry) getStateStore(name, version, logName string) (func() state.Store, bool) {
 	nameLower := strings.ToLower(name)
-	versionLower := strings.ToLower(version)
-	stateStoreFn, ok := s.stateStores[nameLower+"/"+versionLower]
+	//versionLower := strings.ToLower(version)
+	stateStoreFn, ok := s.stateStores[nameLower] //+"/"+versionLower]
 	if ok {
 		return s.wrapFn(stateStoreFn, logName), true
 	}

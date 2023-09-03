@@ -1,0 +1,4 @@
+port: 8080
+wasmPath: "main.wasm"
+componentPath: "resource-path"
+trigger: "state"

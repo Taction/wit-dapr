@@ -38,6 +38,9 @@ func ReadString(mod api.Module, ptr, len uint32) (string, bool) {
 	}
 	return string(data), true
 }
+func ReadBytes(mod api.Module, ptr, len uint32) ([]byte, bool) {
+	return mod.Memory().Read(ptr, len)
+}
 
 func WriteString(ctx context.Context, module api.Module, ptr uint32, str string) error {
 	data := []byte(str)

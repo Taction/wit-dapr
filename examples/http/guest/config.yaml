@@ -1,0 +1,3 @@
+port: 8080
+wasmPath: "main.wasm"
+trigger: "http"
